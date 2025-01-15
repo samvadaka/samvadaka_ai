@@ -1,1 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Samvadaka Virtual Interview Portal</title>
+  <style>
+    /* Peaceful background and base font styles */
+    body {
+      background: #f0f8ff; /* Light, calm background color */
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
 
+    /* Container to center content and give it a clean look */
+    .container {
+      max-width: 650px;
+      margin: 50px auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+    }
+
+    /* Heading style */
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* Paragraph for welcome message */
+    p {
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+
+    /* Hide file input to create a custom flow */
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Single operation button */
+    button {
+      background-color: #5EB5F3; /* Soothing blue */
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: not-allowed;
+      outline: none;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #4EA1E0;
+    }
+
+    /* Align buttons next to each other */
+    .button-container {
+      display: flex;
+      align-items: center;
+      gap: 10px; /* Space between buttons */
+      margin-top: 10px;
+    }
+
+    /* Initially hide the Vapi button */
+    .vapi-hidden {
+      display: none;
+    }
+
+    /* Small footer centered, referencing samvadaka.com */
+    footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Samvadaka Virtual Interview Portal</h1>
+    <p>
+      Welcome! Clicking the button below will prompt you to select your DAF 
+      (<strong>PDF, DOC, or DOCX only</strong>).
+    </p>
+
+    <!-- Hidden file input that accepts only PDF/DOC/DOCX -->
+    <input 
+      type="file" 
+      id="fileInput" 
+      accept=".pdf,.doc,.docx"
+    />
+
+    <!-- Buttons container -->
+    <div class="button-container">
+      <button id="uploadBtn">Select &amp; Upload DAF</button>
+      <div id="vapi-widget"></div>
+    </div>
+
+    <!-- Small Footer Reference -->
+    <footer>samvadaka.com</footer>
+  </div>
+
+  <script>
+
+    const vapiWidgetContainer = document.getElementById('vapi-widget');
+    // Reference to the hidden file input and the button
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+     window.addEventListener('load', () => {
+      // Attempt to find the dynamically added Vapi button by its ID
+      const interval = setInterval(() => {
+        const vapiButton = document.getElementById('vapi-support-btn');
+        if (vapiButton) {
+          // Move the Vapi button to the button container
+          const vapiWidget = document.getElementById('vapi-widget');
+          vapiWidget.appendChild(vapiButton);
+
+          // Stop checking once the button is found
+          clearInterval(interval);
+
+          // Hide the container initially
+          //buttonContainer.style.display = 'none';
+        }
+      }, 100); // Check every 100ms until the button is found
+    });
+
+    // 1. When user clicks the button, open the file dialog
+   // uploadBtn.addEventListener('click', () => {
+   //   fileInput.click();
+   // });
+
+    // 2. Once the user selects a file, automatically do the DELETE/UPLOAD sequence
+    fileInput.addEventListener('change', () => {
+      if (!fileInput.files || fileInput.files.length === 0) {
+        // User canceled or didn't select a file
+        return;
+      }
+
+      // Check if the file extension is allowed (in case accept is bypassed)
+      const allowedExtensions = ['pdf', 'doc', 'docx'];
+      const file = fileInput.files[0];
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+
+      if (!allowedExtensions.includes(fileExtension)) {
+        alert('Please select only PDF, DOC, or DOCX files.');
+        fileInput.value = ''; // Clear the input
+        return;
+      }
+      
+      // 2a. GET the list of existing files
+      fetch('https://api.vapi.ai/file', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer f2329013-3543-4b58-b3cf-897fb16c6589'
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.text().then(err => {
+            throw new Error(`Error fetching file list: ${err}`);
+          });
+        }
+        return response.json();
+      })
+      .then(filesData => {
+        console.log('Current files list:', filesData);
+
+        // 2b. DELETE all existing files
+        const deletePromises = filesData.map(fileObj => {
+          return fetch(`https://api.vapi.ai/file/${fileObj.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': 'Bearer f2329013-3543-4b58-b3cf-897fb16c6589'
+            }
+          })
+          .then(deleteResp => {
+            if (!deleteResp.ok) {
+              return deleteResp.text().then(err => {
+                throw new Error(`Error deleting file ${fileObj.id}: ${err}`);
+              });
+            }
+            return deleteResp.json();
+          });
+        });
+
+        return Promise.all(deletePromises);
+      })
+      .then(deleteResults => {
+        console.log('All files deleted:', deleteResults);
+
+        // 2c. UPLOAD the newly selected file
+        const formData = new FormData();
+        formData.append('file', file);
+
+        return fetch('https://api.vapi.ai/file', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer f2329013-3543-4b58-b3cf-897fb16c6589'
+          },
+          body: formData
+        });
+      })
+      .then(uploadResponse => {
+        if (!uploadResponse.ok) {
+          return uploadResponse.text().then(err => {
+            throw new Error(`File upload error: ${err}`);
+          });
+        }
+        return uploadResponse.json();
+      })
+      .then(uploadData => {
+        console.log('Upload response:', uploadData);
+        alert('Your DAF uploaded successfully!');
+        // Reset the file input if you want to allow re-uploads
+        fileInput.value = '';
+        vapiWidgetContainer.classList.remove('vapi-hidden');
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert(`Error: ${error.message}`);
+        // Optional: reset file input on error
+        fileInput.value = '';
+      });
+    });
+
+  var vapiInstance = null;
+  const assistant = "eca3d29f-b813-4a4b-9283-912d24d52e86"; // Substitute with your assistant ID
+  const apiKey = "14bd3f42-8dbd-4628-ac04-62a5506c6678"; // Substitute with your Public key from Vapi Dashboard.
+  const buttonConfig = {
+    position: "center", // "bottom" | "top" | "left" | "right" | "top-right" | "top-left" | "bottom-left" | "bottom-right"
+    offset: "40px", // decide how far the button should be from the edge
+    width: "50px", // min-width of the button
+    height: "50px", // height of the button
+    
+  }; // Modify this as required
+
+  (function (d, t) {
+    var g = document.createElement(t),
+      s = d.getElementsByTagName(t)[0];
+    g.src =
+      "https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js";
+    g.defer = true;
+    g.async = true;
+    s.parentNode.insertBefore(g, s);
+
+    g.onload = function () {
+      var vapiInstance = window.vapiSDK.run({
+          apiKey: apiKey,
+          squad: assistant,
+          config: buttonConfig,
+        });
+
+       vapiInstance.on('call-end', () => {
+            console.log('Call has stopped');
+            alert("Thanks for your time. We analyze and share the details ASAP.")
+           //vapiWidgetContainer.classList.add('vapi-hidden');
+      });
+    };
+  })(document, "script");
+
+  </script>
+</body>
+</html>
